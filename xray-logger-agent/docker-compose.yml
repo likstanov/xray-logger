@@ -1,0 +1,11 @@
+version: "3.9"
+services:
+  xray-logger-agent:
+    build: .
+    container_name: xray_logger_agent
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - /var/lib/marzban-node:/var/lib/marzban-node:ro
+    network_mode: bridge
