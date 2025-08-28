@@ -1,0 +1,10 @@
+# common
+.git
+.gitignore
+.DS_Store
+__MACOSX
+node_modules
+npm-debug.log*
+docker-compose*.yml
+.env
+*.zip
