@@ -11,7 +11,6 @@ services:
       TZ: UTC
     volumes:
       - dbdata:/var/lib/postgresql/data
-      - ./db/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
     networks:
       - xraylogger-net
 
