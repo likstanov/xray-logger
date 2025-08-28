@@ -2,7 +2,6 @@
 -- Инициализация схемы для xray-logger
 
 CREATE TABLE IF NOT EXISTS xray_logs (
-  id           BIGSERIAL PRIMARY KEY,
   xray_user    VARCHAR(255) NOT NULL,
   user_ip      INET         NOT NULL,
   target       TEXT         NOT NULL,
@@ -37,4 +36,4 @@ CREATE INDEX IF NOT EXISTS idx_xray_logs_datetime ON xray_logs (datetime DESC);
 CREATE INDEX IF NOT EXISTS idx_xray_logs_user     ON xray_logs (xray_user, datetime DESC);
 CREATE INDEX IF NOT EXISTS idx_xray_logs_user_ip  ON xray_logs (user_ip, datetime DESC);
 CREATE INDEX IF NOT EXISTS idx_xray_logs_target   ON xray_logs (target, datetime DESC);
-CREATE INDEX IF NOT EXISTS idx_xray_logs_node     ON xray_logs (node_name, datetime DESC);
+CREATE INDEX IF NOT EXISTS idx_xray_logs_node     ON xray_logs (node_name, datetime DESC)
