@@ -33,6 +33,7 @@ const httpsAgent = new https.Agent({ keepAlive: true, rejectUnauthorized: VERIFY
 
 let buffer = [];
 let timer = null;
+let flushing = false; // защищаемся от параллельных flush
 
 function scheduleFlush() {
   if (timer) return;
@@ -45,31 +46,45 @@ function shouldDropByPolicy(target, port) {
   return DENY_TARGETS.includes(t) || DENY_PORTS.includes(p);
 }
 
-async function flush() {
-  if (buffer.length === 0) return;
-
+async function sendBatch(batch) {
   const payload = {
     node_name: NODE_NAME,
     node_ip: NODE_IP,
     sent_at: new Date().toISOString(),
-    records: buffer.splice(0, buffer.length),
+    records: batch,
   };
-
   const { iv_b64, tag_b64, data_b64 } = encrypt(payload, ENCRYPTION_KEY_BASE64);
+  const res = await axios.post(
+    API_URL,
+    { iv_b64, tag_b64, data_b64 },
+    { httpAgent, httpsAgent, timeout: 10000, maxBodyLength: 10 * 1024 * 1024 }
+  );
+  const { received, inserted } = res.data || {};
+  console.log(`sent=${batch.length} received=${received} inserted=${inserted}`);
+}
 
+async function flush() {
+  if (flushing) return;
+  flushing = true;
   try {
-    const res = await axios.post(
-      API_URL,
-      { iv_b64, tag_b64, data_b64 },
-      { httpAgent, httpsAgent, timeout: 10000, maxBodyLength: 10 * 1024 * 1024 }
-    );
-    const { received, inserted } = res.data || {};
-    console.log(`sent=${payload.records.length} received=${received} inserted=${inserted}`);
-  } catch (e) {
-    const status = e.response?.status;
-    const data = e.response?.data;
-    console.error('send failed:', status, data || e.message);
-    buffer = payload.records.concat(buffer);
+    // шлём кусками не больше BATCH_SIZE
+    while (buffer.length > 0) {
+      const batch = buffer.splice(0, Math.min(buffer.length, BATCH_SIZE));
+      try {
+        await sendBatch(batch);
+      } catch (e) {
+        const status = e.response?.status;
+        const data = e.response?.data;
+        console.error('send failed:', status, data || e.message);
+        // вернём неотправленное назад
+        buffer = batch.concat(buffer);
+        break; // выходим, чтобы не крутиться на ошибке; следующая попытка по таймеру
+      }
+      // если накопилось ещё — продолжаем сразу же следующей итерацией цикла
+      if (buffer.length === 0) break;
+    }
+  } finally {
+    flushing = false;
   }
 }
 
@@ -106,6 +121,7 @@ function handleLine(line) {
   });
 
   if (buffer.length >= BATCH_SIZE) {
+    // триггерим немедленную отправку (чанками), но без параллелизма
     flush().catch(e => console.error('flush error', e.message));
   } else {
     scheduleFlush();
@@ -156,4 +172,4 @@ async function poll() {
 })();
 
 process.on('SIGTERM', async () => { console.log('SIGTERM, flushing...'); await flush(); process.exit(0); });
-process.on('SIGINT', async () => { console.log('SIGINT, flushing...'); await flush(); process.exit(0); });
+process.on('SIGINT',  async () => { console.log('SIGINT,  flushing...'); await flush(); process.exit(0); });

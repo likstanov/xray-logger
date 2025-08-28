@@ -30,7 +30,7 @@ const DENY_PORTS = new Set((process.env.DENY_PORTS || '').split(',').map(s => pa
 
 const app = express();
 app.use(helmet());
-app.use(express.json({ limit: '5mb' }));
+app.use(express.json({ limit: process.env.BODY_LIMIT || '25mb' }));
 app.use(morgan('combined'));
 
 app.get('/healthz', (_req, res) => res.json({ ok: true }));
