@@ -1,12 +1,12 @@
 -- /opt/xray-logger/db/init.sql
--- Инициализация схемы для xray-logger (БД создаёт entrypoint по переменным окружения)
+-- Инициализация схемы для xray-logger
 
 CREATE TABLE IF NOT EXISTS xray_logs (
   id           BIGSERIAL PRIMARY KEY,
   xray_user    VARCHAR(255) NOT NULL,
   user_ip      INET         NOT NULL,
   target       TEXT         NOT NULL,
-  port         INTEGER      NOT NULL,  -- важно: INTEGER, т.к. порты до 65535
+  port         INTEGER      NOT NULL,
   protocol_in  VARCHAR(3)   NULL CHECK (protocol_in IN ('tcp','udp')),
   protocol_out VARCHAR(3)   NOT NULL CHECK (protocol_out IN ('tcp','udp')),
   node_ip      INET         NOT NULL,

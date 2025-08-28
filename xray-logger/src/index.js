@@ -100,7 +100,7 @@ app.post('/api/v1/logs', async (req, res) => {
       const placeholders = [];
       records.forEach((r, idx) => {
         const baseIndex = idx * cols.length;
-        placeholders.push(`(${cols.map((_, i) => `$${baseIndex + i + 1}`).join(',')})`);
+        placeholders.push(`(${cols.map((_, i) => '$' + (baseIndex + i + 1)).join(',')})`);
         values.push(
           r.xray_user, r.user_ip, r.target, r.port,
           r.protocol_in ?? null, r.protocol_out,
@@ -108,6 +108,7 @@ app.post('/api/v1/logs', async (req, res) => {
           new Date(r.datetime_iso),
         );
       });
+
       const sql = `INSERT INTO xray_logs (${cols.join(',')}) VALUES ${placeholders.join(',')}
                    ON CONFLICT ON CONSTRAINT xray_logs_uniqueness DO NOTHING`;
       const result = await client.query(sql, values);
