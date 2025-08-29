@@ -10,7 +10,7 @@ import { parseLine } from './parser.js';
 dotenv.config();
 
 const ACCESS_LOG_PATH = process.env.ACCESS_LOG_PATH || '/var/lib/marzban-node/access.log';
-const API_URL = process.env.API_URL;
+const API_URL = process.env.API_URL + '/api/v1/logs';
 const NODE_NAME = process.env.NODE_NAME || 'UNKNOWN';
 const LOG_TZ = process.env.LOG_TIMEZONE || 'UTC';
 const BATCH_SIZE = Number(process.env.BATCH_SIZE || 200);
