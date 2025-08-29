@@ -10,7 +10,7 @@ import { parseLine } from './parser.js';
 dotenv.config();
 
 const ACCESS_LOG_PATH = process.env.ACCESS_LOG_PATH || '/var/lib/marzban-node/access.log';
-const API_URL = process.env.API_URL + '/api/v1/logs';
+const API_URL = (process.env.API_URL || '').replace(/\/+$/, '') + '/api/v1/logs';
 const NODE_NAME = process.env.NODE_NAME || 'UNKNOWN';
 const LOG_TZ = process.env.LOG_TIMEZONE || 'UTC';
 const BATCH_SIZE = Number(process.env.BATCH_SIZE || 200);
@@ -24,6 +24,9 @@ const DENY_TARGETS = (process.env.DENY_TARGETS || 'one.one.one.one,dns.google,1.
 const DENY_PORTS = (process.env.DENY_PORTS || '53,853')
   .split(',').map(s => parseInt(s, 10)).filter(n => !Number.isNaN(n));
 
+const TRUNCATE_ENABLED = (process.env.TRUNCATE_ENABLED || 'false').toLowerCase() === 'true';
+const TRUNCATE_INTERVAL_STR = (process.env.TRUNCATE_INTERVAL || '24h').trim();
+
 if (!API_URL) { console.error('API_URL is required'); process.exit(1); }
 if (!ENCRYPTION_KEY_BASE64) { console.error('ENCRYPTION_KEY_BASE64 is required'); process.exit(1); }
 
@@ -32,7 +35,26 @@ const httpsAgent = new https.Agent({ keepAlive: true, rejectUnauthorized: VERIFY
 
 let buffer = [];
 let timer = null;
-let flushing = false; // защищаемся от параллельных flush
+let flushing = false;
+
+// текущая позиция чтения
+let lastSize = 0;
+let position = 0;
+
+function parseIntervalToMs(s) {
+  const m = String(s).trim().match(/^(\d+)(ms|s|m|h|d)?$/i);
+  if (!m) return 24 * 60 * 60 * 1000; // сутки по умолчанию
+  const n = Number(m[1]);
+  const unit = (m[2] || 'ms').toLowerCase();
+  switch (unit) {
+    case 'ms': return n;
+    case 's':  return n * 1000;
+    case 'm':  return n * 60 * 1000;
+    case 'h':  return n * 60 * 60 * 1000;
+    case 'd':  return n * 24 * 60 * 60 * 1000;
+    default:   return 24 * 60 * 60 * 1000;
+  }
+}
 
 function scheduleFlush() {
   if (timer) return;
@@ -65,7 +87,6 @@ async function flush() {
   if (flushing) return;
   flushing = true;
   try {
-    // шлём кусками не больше BATCH_SIZE
     while (buffer.length > 0) {
       const batch = buffer.splice(0, Math.min(buffer.length, BATCH_SIZE));
       try {
@@ -74,11 +95,9 @@ async function flush() {
         const status = e.response?.status;
         const data = e.response?.data;
         console.error('send failed:', status, data || e.message);
-        // вернём неотправленное назад
         buffer = batch.concat(buffer);
-        break; // выходим, чтобы не крутиться на ошибке; следующая попытка по таймеру
+        break;
       }
-      // если накопилось ещё — продолжаем сразу же следующей итерацией цикла
       if (buffer.length === 0) break;
     }
   } finally {
@@ -118,22 +137,18 @@ function handleLine(line) {
   });
 
   if (buffer.length >= BATCH_SIZE) {
-    // триггерим немедленную отправку (чанками), но без параллелизма
     flush().catch(e => console.error('flush error', e.message));
   } else {
     scheduleFlush();
   }
 }
 
-let lastSize = 0;
-let position = 0;
-
 async function poll() {
   try {
     const stats = await fs.promises.stat(ACCESS_LOG_PATH);
 
     if (stats.size < lastSize) {
-      position = 0; // truncated
+      position = 0;
     }
     lastSize = stats.size;
 
@@ -155,6 +170,27 @@ async function poll() {
   }
 }
 
+function startTruncateScheduler() {
+  if (!TRUNCATE_ENABLED) return;
+  const intervalMs = parseIntervalToMs(TRUNCATE_INTERVAL_STR);
+  const used = (Number.isFinite(intervalMs) && intervalMs >= 10_000) ? intervalMs : 24 * 60 * 60 * 1000;
+  if (used !== intervalMs) console.warn(`TRUNCATE_INTERVAL="${TRUNCATE_INTERVAL_STR}" некорректен/слишком мал; используем 24h`);
+  console.log(`truncate scheduler enabled: every ${used} ms`);
+  setInterval(doTruncate, used);
+}
+
+async function doTruncate() {
+  try {
+    await flush().catch(() => {});
+    await fs.promises.truncate(ACCESS_LOG_PATH, 0);
+    lastSize = 0;
+    position = 0;
+    console.log(`log truncated: ${ACCESS_LOG_PATH}`);
+  } catch (e) {
+    console.warn(`truncate failed: ${e.message} (make sure that volume is not :ro and that you have rights to the file.)`);
+  }
+}
+
 (async function main() {
   try {
     const stats = await fs.promises.stat(ACCESS_LOG_PATH);
@@ -164,6 +200,7 @@ async function poll() {
     console.warn(`Waiting for log file at ${ACCESS_LOG_PATH} ...`);
   } finally {
     poll();
+    startTruncateScheduler();
     console.log('xray-logger-agent started');
   }
 })();
