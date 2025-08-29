@@ -1,7 +1,7 @@
 version: "3.9"
 services:
   xray-logger-agent:
-    build: .
+    image: likstanov/xray-logger-agent:${XRAY_LOGGER_AGENT_TAG:-latest}
     container_name: xray_logger_agent
     restart: always
     env_file:
