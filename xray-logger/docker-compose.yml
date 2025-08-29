@@ -14,7 +14,7 @@ services:
       - xraylogger-net
 
   app:
-    image: likstanov/xray-logger:${XRAY_LOGGER_TAG:-latest}
+    image: likstanov/xray-logger:latest
     container_name: xraylogger_app
     restart: always
     env_file:
