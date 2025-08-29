@@ -25,7 +25,7 @@ const pool = new Pool({
 });
 pool.on('connect', async (client) => { await client.query("SET TIME ZONE 'UTC'"); });
 
-
+/** ---------------- Авто-инициализация схемы ---------------- */
 const MIGRATION_SQL = `
 CREATE TABLE IF NOT EXISTS xray_logs (
   xray_user    VARCHAR(255) NOT NULL,
@@ -81,7 +81,7 @@ async function ensureSchema(pool, attempts = 30) {
   }
   throw lastErr;
 }
-/** ------------------------------------------------------------ */
+/** ------------------------------------------------------------------------- */
 
 const DENY_TARGETS = new Set((process.env.DENY_TARGETS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean));
 const DENY_PORTS = new Set((process.env.DENY_PORTS || '').split(',').map(s => parseInt(s, 10)).filter(n => !Number.isNaN(n)));
@@ -90,6 +90,21 @@ const app = express();
 app.use(helmet());
 app.use(express.json({ limit: process.env.BODY_LIMIT || '25mb' }));
 app.use(morgan('combined'));
+
+const TRUST_PROXY = (process.env.TRUST_PROXY || 'false').toLowerCase() === 'true';
+if (TRUST_PROXY) app.set('trust proxy', true);
+
+function extractNodeIp(req) {
+  // если включен trust proxy — Express возьмёт левый X-Forwarded-For
+  let ip = TRUST_PROXY
+    ? req.ip
+    : (req.socket?.remoteAddress || '');
+
+  if (ip && ip.startsWith('::ffff:')) ip = ip.slice(7);
+
+  return ip || '0.0.0.0';
+}
+/** ------------------------------------------------------------ */
 
 app.get('/healthz', (_req, res) => res.json({ ok: true }));
 
@@ -103,12 +118,10 @@ const recordSchema = z.object({
   protocol_out: z.enum(['tcp', 'udp']),
   inbound: z.string(),
   outbound: z.string(),
-  node_ip: z.string(),
   node_name: z.string(),
 });
 const payloadSchema = z.object({
   node_name: z.string(),
-  node_ip: z.string(),
   sent_at: z.string(),
   records: z.array(recordSchema),
 });
@@ -140,6 +153,8 @@ app.post('/api/v1/logs', async (req, res) => {
       return res.status(403).json({ error: 'Node not allowed' });
     }
 
+    const nodeIp = extractNodeIp(req);
+
     const originalCount = parsed.data.records.length;
     let records = parsed.data.records;
     if (DENY_TARGETS.size || DENY_PORTS.size) {
@@ -162,7 +177,8 @@ app.post('/api/v1/logs', async (req, res) => {
         values.push(
           r.xray_user, r.user_ip, r.target, r.port,
           r.protocol_in ?? null, r.protocol_out,
-          r.node_ip, r.node_name, r.inbound, r.outbound,
+          nodeIp,
+          r.node_name, r.inbound, r.outbound,
           new Date(r.datetime_iso),
         );
       });
@@ -179,7 +195,6 @@ app.post('/api/v1/logs', async (req, res) => {
     res.status(500).json({ error: 'Internal error' });
   }
 });
-
 
 (async () => {
   try {

@@ -12,7 +12,6 @@ dotenv.config();
 const ACCESS_LOG_PATH = process.env.ACCESS_LOG_PATH || '/var/lib/marzban-node/access.log';
 const API_URL = process.env.API_URL;
 const NODE_NAME = process.env.NODE_NAME || 'UNKNOWN';
-const NODE_IP = process.env.NODE_IP || '0.0.0.0';
 const LOG_TZ = process.env.LOG_TIMEZONE || 'UTC';
 const BATCH_SIZE = Number(process.env.BATCH_SIZE || 200);
 const FLUSH_INTERVAL_MS = Number(process.env.FLUSH_INTERVAL_MS || 2000);
@@ -49,7 +48,6 @@ function shouldDropByPolicy(target, port) {
 async function sendBatch(batch) {
   const payload = {
     node_name: NODE_NAME,
-    node_ip: NODE_IP,
     sent_at: new Date().toISOString(),
     records: batch,
   };
@@ -116,7 +114,6 @@ function handleLine(line) {
     protocol_out: parsed.protocol_out,
     inbound: parsed.inbound,
     outbound: parsed.outbound,
-    node_ip: NODE_IP,
     node_name: NODE_NAME,
   });
 
