@@ -1,4 +1,3 @@
-version: "3.9"
 services:
   xray-logger-agent:
     image: likstanov/xray-logger-agent:${XRAY_LOGGER_AGENT_TAG:-latest}
