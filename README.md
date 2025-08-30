@@ -14,14 +14,18 @@ The client and server can work both via http (by IP address) so it is via https 
 ## xray-logger (server)
 
 ### Run the script on the server:
-```curl -fsSL https://raw.githubusercontent.com/likstanov/xray-logger/refs/heads/main/start-xray-logger.sh | sudo bash```
+```
+curl -fsSL https://raw.githubusercontent.com/likstanov/xray-logger/refs/heads/main/start-xray-logger.sh | sudo bash
+```
 
 After executing the script, **copy the secret encryption** key (you will need it when installing the agent client) and also do not forget to **copy the password for the Adminer panel**.
 
 ## xray-logger-agent (client)
 
 ### Run the script on the node:
-```curl -fsSL https://raw.githubusercontent.com/likstanov/xray-logger/refs/heads/main/start-xray-logger-agent.sh | sudo bash -s --```
+```
+curl -fsSL https://raw.githubusercontent.com/likstanov/xray-logger/refs/heads/main/start-xray-logger-agent.sh | sudo bash -s --
+```
 
 Prepare yourself before running the script. It will ask you to enter **the server address** (xray-logger server), **the secret encryption key** (for communication between the client and the server) and **the name of the node** from which the logs are sent.
 
