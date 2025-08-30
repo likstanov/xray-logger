@@ -11,7 +11,6 @@ dotenv.config();
 
 const ACCESS_LOG_DIR = (process.env.ACCESS_LOG_DIR || '/var/lib/marzban-node').replace(/\/+$/, '');
 const ACCESS_LOG_FILE = process.env.ACCESS_LOG_FILE || 'access.log';
-// формируем полный путь без зависимостей от платформенных путей
 const ACCESS_LOG_PATH = `${ACCESS_LOG_DIR}/${ACCESS_LOG_FILE}`;
 
 const API_URL = (process.env.API_URL || '').replace(/\/+$/, '') + '/api/v1/logs';
@@ -31,6 +30,16 @@ const DENY_PORTS = (process.env.DENY_PORTS || '53,853')
 const TRUNCATE_ENABLED = (process.env.TRUNCATE_ENABLED || 'false').toLowerCase() === 'true';
 const TRUNCATE_INTERVAL_STR = (process.env.TRUNCATE_INTERVAL || '24h').trim();
 
+const DEDUP_ENABLED = (process.env.DEDUP_ENABLED || 'true').toLowerCase() === 'true';
+const FLUSH_S = Math.max(1, Math.round(FLUSH_INTERVAL_MS / 1000));
+const DEDUP_KEEP_SECONDS = (() => {
+  const envVal = process.env.DEDUP_KEEP_SECONDS;
+  const auto = Math.max(10, 4 * FLUSH_S);
+  if (!envVal || envVal.trim() === '') return auto;
+  const n = Number(envVal);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : auto;
+})();
+
 if (!API_URL) { console.error('API_URL is required'); process.exit(1); }
 if (!ENCRYPTION_KEY_BASE64) { console.error('ENCRYPTION_KEY_BASE64 is required'); process.exit(1); }
 
@@ -39,11 +48,51 @@ const httpsAgent = new https.Agent({ keepAlive: true, rejectUnauthorized: VERIFY
 
 let buffer = [];
 let timer = null;
-let flushing = false; // не допускаем параллельных flush
+let flushing = false;
 
-// положение чтения
 let lastSize = 0;
 let position = 0;
+
+const dedupBuckets = new Map();
+function nowEpochSec() { return Math.floor(Date.now() / 1000); }
+function isoToEpochSec(iso) { return Math.floor(Date.parse(iso) / 1000); }
+
+function makeDedupKey(rec) {
+  return [
+    rec.datetime_iso,
+    rec.xray_user,
+    rec.user_ip,
+    rec.target,
+    rec.port,
+    rec.protocol_in || '',
+    rec.protocol_out,
+    rec.inbound,
+    rec.outbound,
+    NODE_NAME,
+  ].join('|');
+}
+
+function shouldDropByDedup(rec) {
+  if (!DEDUP_ENABLED) return false;
+  const sec = isoToEpochSec(rec.datetime_iso);
+  let bucket = dedupBuckets.get(sec);
+  if (!bucket) {
+    bucket = new Set();
+    dedupBuckets.set(sec, bucket);
+    pruneOldBuckets();
+  }
+  const key = makeDedupKey(rec);
+  if (bucket.has(key)) return true;
+  bucket.add(key);
+  return false;
+}
+
+function pruneOldBuckets() {
+  const threshold = nowEpochSec() - Math.max(10, DEDUP_KEEP_SECONDS);
+  for (const sec of dedupBuckets.keys()) {
+    if (sec < threshold) dedupBuckets.delete(sec);
+  }
+}
 
 function parseIntervalToMs(s) {
   const m = String(s).trim().match(/^(\d+)(ms|s|m|h|d)?$/i);
@@ -100,7 +149,7 @@ async function flush() {
         const data = e.response?.data;
         console.error('send failed:', status, data || e.message);
         buffer = batch.concat(buffer);
-        break; // следующая попытка — по таймеру
+        break;
       }
       if (buffer.length === 0) break;
     }
@@ -112,7 +161,7 @@ async function flush() {
 function toUTC(dateStr, timeStr) {
   const dt = DateTime.fromFormat(`${dateStr} ${timeStr}`, 'yyyy/MM/dd HH:mm:ss', { zone: LOG_TZ });
   if (!dt.isValid) return null;
-  return dt.toUTC().toISO();
+  return dt.toUTC().toISO({ suppressMilliseconds: true });
 }
 
 function handleLine(line) {
@@ -127,7 +176,7 @@ function handleLine(line) {
 
   if (shouldDropByPolicy(parsed.target, parsed.port)) return;
 
-  buffer.push({
+  const rec = {
     datetime_iso: dtIso,
     xray_user: parsed.xray_user_after_dot,
     user_ip: parsed.user_ip,
@@ -138,7 +187,11 @@ function handleLine(line) {
     inbound: parsed.inbound,
     outbound: parsed.outbound,
     node_name: NODE_NAME,
-  });
+  };
+
+  if (shouldDropByDedup(rec)) return;
+
+  buffer.push(rec);
 
   if (buffer.length >= BATCH_SIZE) {
     flush().catch(e => console.error('flush error', e.message));
@@ -152,7 +205,6 @@ async function poll() {
     const stats = await fs.promises.stat(ACCESS_LOG_PATH);
 
     if (stats.size < lastSize) {
-      // файл уменьшился (truncate/logrotate) — читаем с начала
       position = 0;
     }
     lastSize = stats.size;
@@ -179,7 +231,7 @@ function startTruncateScheduler() {
   if (!TRUNCATE_ENABLED) return;
   const intervalMs = parseIntervalToMs(TRUNCATE_INTERVAL_STR);
   const used = (Number.isFinite(intervalMs) && intervalMs >= 10_000) ? intervalMs : 24 * 60 * 60 * 1000;
-  if (used !== intervalMs) console.warn(`TRUNCATE_INTERVAL="${TRUNCATE_INTERVAL_STR}" некорректен/слишком мал; используем 24h`);
+  if (used !== intervalMs) console.warn(`TRUNCATE_INTERVAL="${TRUNCATE_INTERVAL_STR}" incorrect/too small; we will use 24h by default`);
   console.log(`truncate scheduler enabled: every ${used} ms`);
   setInterval(doTruncate, used);
 }
@@ -192,7 +244,7 @@ async function doTruncate() {
     position = 0;
     console.log(`log truncated: ${ACCESS_LOG_PATH}`);
   } catch (e) {
-    console.warn(`truncate failed: ${e.message} (проверь, что volume не :ro и есть права на файл)`);
+    console.warn(`truncate failed: ${e.message} (make sure that volume is not :ro and that you have rights to the file)`);
   }
 }
 
@@ -206,7 +258,7 @@ async function doTruncate() {
   } finally {
     poll();
     startTruncateScheduler();
-    console.log('xray-logger-agent started');
+    console.log('xray-logger-agent started (dedup window =', DEDUP_KEEP_SECONDS, 'sec)');
   }
 })();
 

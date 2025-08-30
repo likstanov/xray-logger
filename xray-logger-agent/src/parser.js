@@ -1,7 +1,3 @@
-// Parser for plain access.log lines (with optional microseconds)
-// Examples:
-// 2025/07/24 16:34:37.777007 from 213.87.133.176:7616 accepted tcp:www.google.com:443 [VLESS TCP REALITY >> DIRECT] email: 412.6218924756_RykO
-// 2025/07/24 16:34:39 from tcp:46.138.157.205:2414 accepted udp:239.255.255.250:1900 [VLESS TCP REALITY -> BLOCK] email: 4849.7556515598_D8T8
 const plainRe = /^(\d{4}\/\d{2}\/\d{2}) (\d{2}:\d{2}:\d{2})(?:\.\d+)? from (?:(tcp|udp):)?([0-9a-fA-F:.]+):\d+ accepted (tcp|udp):([^:\s]+):(\d+) \[([^\]]+)\] email: (\d+)\.([^\s]+)$/;
 
 function splitInboundOutbound(bracket) {
@@ -33,7 +29,7 @@ export function parseLine(line) {
 
   return {
     date,
-    time, // already without microseconds
+    time,
     protocol_in: protoIn || null,
     protocol_out: protoOut.toLowerCase(),
     user_ip: userIp,
