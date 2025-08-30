@@ -1,5 +1,5 @@
 const plainRe =
-  /^(\d{4}\/\d{2}\/\d{2}) (\d{2}:\d{2}:\d{2})(?:\.\d+)? from (?:(tcp|udp):)?([0-9a-fA-F:.]+):\d+ accepted (tcp|udp):([^:\s]+):(\d+) \[([^\]]+)\] email: (?:\d+\.)?([^\s]+)$/;
+  /^(\d{4}\/\d{2}\/\d{2})\s+(\d{2}:\d{2}:\d{2})(?:\.\d+)?\s+from\s+(?:(tcp|udp):)?([0-9a-fA-F:.]+):\d+\s+accepted\s+(tcp|udp):([^:\s]+):(\d+)\s+\[([^\]]+)\]\s+email:\s+(?:\d+\.)?([^\s]+)\s*$/;
 
 function splitInboundOutbound(bracket) {
   const arrow = bracket.includes('>>') ? '>>' : (bracket.includes('->') ? '->' : null);
@@ -9,28 +9,29 @@ function splitInboundOutbound(bracket) {
 }
 
 export function parseLine(line) {
-  if (line.includes(' DOH//') || line.includes(' got answer:')) return null;
+  if (!line || line.includes(' DOH//') || line.includes(' got answer:')) return null;
+
   const m = line.match(plainRe);
   if (!m) return null;
 
   const [
     _,
-    date,
-    time,
-    protoIn,
-    userIp,
-    protoOut,
-    target,
-    portStr,
-    bracket,
-    userAfterOptPrefix,
+    date,        // 1
+    time,        // 2
+    protoIn,     // 3 (tcp|udp|undefined)
+    userIp,      // 4
+    protoOut,    // 5 (tcp|udp)
+    target,      // 6
+    portStr,     // 7
+    bracket,     // 8
+    username,    // 9 — without "digits."
   ] = m;
 
   const { inbound, outbound } = splitInboundOutbound(bracket);
 
   return {
     date,
-    time,
+    time, 
     protocol_in: protoIn || null,
     protocol_out: protoOut.toLowerCase(),
     user_ip: userIp,
@@ -38,6 +39,6 @@ export function parseLine(line) {
     port: Number(portStr),
     inbound,
     outbound,
-    xray_user_after_dot: userAfterOptPrefix, // "Mishka-reserve" в обоих вариантах
+    xray_user_after_dot: username,
   };
 }
