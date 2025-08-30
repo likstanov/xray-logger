@@ -98,8 +98,13 @@ VERIFY_TLS=true
 DENY_TARGETS=one.one.one.one,dns.google,1.1.1.1,8.8.8.8
 DENY_PORTS=53,853
 
-# Periodic cleaning of the log file
-TRUNCATE_ENABLED=true
-# Interval: The suffixes ms, s, m, h, d are supported (for example, 24h, 12h, 30m, 86400000ms)
+# enable/disable local deduplication of identical events in logs in 1 second
+DEDUP_ENABLED=true
+# how many seconds to keep buckets for dedup (limits memory):
+DEDUP_KEEP_SECONDS=30
+
+# periodic cleaning of the log file
+TRUNCATE_ENABLED=false
+# interval: The suffixes ms, s, m, h, d are supported (for example, 24h, 12h, 30m, 86400000ms)
 TRUNCATE_INTERVAL=24h
 ```
