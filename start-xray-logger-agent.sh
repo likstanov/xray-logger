@@ -15,7 +15,6 @@ ask_required() {
   # $1=prompt  $2=varname
   local prompt="$1" varname="$2" reply=""
   while :; do
-    # print to tty (not stdout) and read from tty so pipe won't break us
     printf '%s\n' "$prompt" > /dev/tty
     IFS= read -r reply < /dev/tty || reply=""
     if [ -n "$reply" ]; then
@@ -29,7 +28,6 @@ ask_required() {
 # Safely set or update KEY=VALUE in .env
 set_env() {
   local key="$1" value="$2"
-  # escape / and & for sed
   local esc; esc="$(printf '%s' "$value" | sed -e 's/[\/&]/\\&/g')"
   if [ -f .env ] && grep -Eq "^[[:space:]]*#?[[:space:]]*$key=" .env; then
     sed -i -E "s|^[[:space:]]*#?[[:space:]]*$key=.*|$key=$esc|" .env
@@ -43,7 +41,6 @@ main() {
   require_cmd curl
   require_cmd docker
 
-  # Pick compose
   if docker compose version >/dev/null 2>&1; then
     COMPOSE_CMD="docker compose"
   elif command -v docker-compose >/dev/null 2>&1; then
@@ -66,18 +63,27 @@ main() {
   cp -f .env.example .env && rm -f .env.example
   chmod 600 .env || true
 
-  # Prompts — read from /dev/tty
+  # Prompts (read from /dev/tty)
   ask_required "Enter the secret code you received when installing the xray-logger server:" ENCRYPTION_KEY_BASE64
   set_env "ENCRYPTION_KEY_BASE64" "$ENCRYPTION_KEY_BASE64"
 
-  ask_required "Enter the path to access.log (example: /var/lib/marzban-node/access.log):" ACCESS_LOG_PATH
-  set_env "ACCESS_LOG_PATH" "$ACCESS_LOG_PATH"
+  ask_required "Specify the path to the log directory (example: /var/lib/marzban-node/):" ACCESS_LOG_DIR
+  # Нормализуем без конечных слэшей
+  ACCESS_LOG_DIR="${ACCESS_LOG_DIR%/}"
+  [ -z "$ACCESS_LOG_DIR" ] && ACCESS_LOG_DIR="/var/lib/marzban-node"
+  set_env "ACCESS_LOG_DIR" "$ACCESS_LOG_DIR"
+
+  ask_required "Enter the name of the log file (example: access.log):" ACCESS_LOG_FILE
+  set_env "ACCESS_LOG_FILE" "$ACCESS_LOG_FILE"
 
   ask_required "Enter the API URL (example: http://78.222.213.55:8080 or https://xraylogger.domain.com):" API_URL
   set_env "API_URL" "$API_URL"
 
   ask_required "Enter the Node name (example: Netherlands-1):" NODE_NAME
   set_env "NODE_NAME" "$NODE_NAME"
+
+  # (необязательно) Создадим каталог, если нет
+  mkdir -p "$ACCESS_LOG_DIR" || true
 
   # Start
   $COMPOSE_CMD up -d

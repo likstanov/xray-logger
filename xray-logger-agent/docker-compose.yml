@@ -6,5 +6,5 @@ services:
     env_file:
       - .env
     volumes:
-      - ${ACCESS_LOG_PATH}:${ACCESS_LOG_PATH}:ro
+      - ${ACCESS_LOG_DIR}:${ACCESS_LOG_DIR}
     network_mode: bridge

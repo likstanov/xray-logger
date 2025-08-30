@@ -9,7 +9,11 @@ import { parseLine } from './parser.js';
 
 dotenv.config();
 
-const ACCESS_LOG_PATH = process.env.ACCESS_LOG_PATH || '/var/lib/marzban-node/access.log';
+const ACCESS_LOG_DIR = (process.env.ACCESS_LOG_DIR || '/var/lib/marzban-node').replace(/\/+$/, '');
+const ACCESS_LOG_FILE = process.env.ACCESS_LOG_FILE || 'access.log';
+// формируем полный путь без зависимостей от платформенных путей
+const ACCESS_LOG_PATH = `${ACCESS_LOG_DIR}/${ACCESS_LOG_FILE}`;
+
 const API_URL = (process.env.API_URL || '').replace(/\/+$/, '') + '/api/v1/logs';
 const NODE_NAME = process.env.NODE_NAME || 'UNKNOWN';
 const LOG_TZ = process.env.LOG_TIMEZONE || 'UTC';
@@ -35,15 +39,15 @@ const httpsAgent = new https.Agent({ keepAlive: true, rejectUnauthorized: VERIFY
 
 let buffer = [];
 let timer = null;
-let flushing = false;
+let flushing = false; // не допускаем параллельных flush
 
-// текущая позиция чтения
+// положение чтения
 let lastSize = 0;
 let position = 0;
 
 function parseIntervalToMs(s) {
   const m = String(s).trim().match(/^(\d+)(ms|s|m|h|d)?$/i);
-  if (!m) return 24 * 60 * 60 * 1000; // сутки по умолчанию
+  if (!m) return 24 * 60 * 60 * 1000;
   const n = Number(m[1]);
   const unit = (m[2] || 'ms').toLowerCase();
   switch (unit) {
@@ -96,7 +100,7 @@ async function flush() {
         const data = e.response?.data;
         console.error('send failed:', status, data || e.message);
         buffer = batch.concat(buffer);
-        break;
+        break; // следующая попытка — по таймеру
       }
       if (buffer.length === 0) break;
     }
@@ -148,6 +152,7 @@ async function poll() {
     const stats = await fs.promises.stat(ACCESS_LOG_PATH);
 
     if (stats.size < lastSize) {
+      // файл уменьшился (truncate/logrotate) — читаем с начала
       position = 0;
     }
     lastSize = stats.size;
@@ -187,7 +192,7 @@ async function doTruncate() {
     position = 0;
     console.log(`log truncated: ${ACCESS_LOG_PATH}`);
   } catch (e) {
-    console.warn(`truncate failed: ${e.message} (make sure that volume is not :ro and that you have rights to the file.)`);
+    console.warn(`truncate failed: ${e.message} (проверь, что volume не :ro и есть права на файл)`);
   }
 }
 
