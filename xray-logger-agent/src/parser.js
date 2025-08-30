@@ -1,4 +1,5 @@
-const plainRe = /^(\d{4}\/\d{2}\/\d{2}) (\d{2}:\d{2}:\d{2})(?:\.\d+)? from (?:(tcp|udp):)?([0-9a-fA-F:.]+):\d+ accepted (tcp|udp):([^:\s]+):(\d+) \[([^\]]+)\] email: (\d+)\.([^\s]+)$/;
+const plainRe =
+  /^(\d{4}\/\d{2}\/\d{2}) (\d{2}:\d{2}:\d{2})(?:\.\d+)? from (?:(tcp|udp):)?([0-9a-fA-F:.]+):\d+ accepted (tcp|udp):([^:\s]+):(\d+) \[([^\]]+)\] email: (?:\d+\.)?([^\s]+)$/;
 
 function splitInboundOutbound(bracket) {
   const arrow = bracket.includes('>>') ? '>>' : (bracket.includes('->') ? '->' : null);
@@ -11,6 +12,7 @@ export function parseLine(line) {
   if (line.includes(' DOH//') || line.includes(' got answer:')) return null;
   const m = line.match(plainRe);
   if (!m) return null;
+
   const [
     _,
     date,
@@ -21,8 +23,7 @@ export function parseLine(line) {
     target,
     portStr,
     bracket,
-    /* userPrefix */,
-    userAfterDot,
+    userAfterOptPrefix,
   ] = m;
 
   const { inbound, outbound } = splitInboundOutbound(bracket);
@@ -37,6 +38,6 @@ export function parseLine(line) {
     port: Number(portStr),
     inbound,
     outbound,
-    xray_user_after_dot: userAfterDot,
+    xray_user_after_dot: userAfterOptPrefix, // "Mishka-reserve" в обоих вариантах
   };
 }
