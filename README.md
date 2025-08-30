@@ -9,6 +9,8 @@ The client and server can work both via http (by IP address) so it is via https 
 2. If you want to set up work via *https + domain*, **prepare a proxy server**. 
 3. You also need to **prepare a proxy server for working with Adminer** (this is mandatory).
 
+*Tested and works with **Marzban** and **Remna** panels*
+
 # Installation
 
 ## xray-logger (server)
