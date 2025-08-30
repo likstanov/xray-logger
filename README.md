@@ -39,22 +39,23 @@ You can configure the server by editing the **/opt/xray-logger/.env** (by defaul
 # xray-logger (server) .env example
 PORT=8080
 
-#true if nginx/Cloudflare is behind the server and you need a client IP from X-Forwarded-For.
-#On the proxy server, you need to transmit the client's address in the stub:
-#proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-#proxy_set_header X-Real-IP $remote_addr;
+# true if nginx/Cloudflare is behind the server and you need a client IP from X-Forwarded-For.
+# On the proxy server, you need to transmit the client's address in the stub:
+# proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+# proxy_set_header X-Real-IP $remote_addr;
 TRUST_PROXY=false
 
-#openssl rand -base64 32
+# openssl rand -base64 32
 ENCRYPTION_KEY_BASE64=JeQ7i6EsZE58Z16v6LjhPstC742uAhePd6L42eHNfaA=
 
+# data for initialization and connection to the database
 PGHOST=db
 PGPORT=5432
 PGDATABASE=xray_logger
 PGUSER=xraylogger
 PGPASSWORD=postgresqlPassword
 
-# request body limit for /api/v1/logs
+# request body limit for API
 BODY_LIMIT=25mb
 
 # Optional: comma-separated node names to accept (leave empty to accept all)
@@ -74,26 +75,26 @@ You can configure the client by editing the **/opt/xray-logger/agent/.env** file
 ACCESS_LOG_DIR=/var/lib/marzban-node
 ACCESS_LOG_FILE=access.log
 
-#server address must be written in http:// or https format
-#example: http://78.222.213.55:8080 or https://xraylogger.domain.com
+# server address must be written in http:// or https format
+# example: http://78.222.213.55:8080 or https://xraylogger.domain.com
 API_URL=https://api.xrayproject.com
 
 NODE_NAME=NODE-1
 
 LOG_TIMEZONE=UTC
 
-#batch size (number of log entries) to generate and send to the server
+# batch size (number of log entries) to generate and send to the server
 BATCH_SIZE=200
-#the interval for sending batches to the server
+# the interval for sending batches to the server
 FLUSH_INTERVAL_MS=10000
-#should the application start scanning logs from the very beginning when launching the application?
+# should the application start scanning logs from the very beginning when launching the application?
 START_FROM_BEGINNING=false
 
-#the secret encryption key
+# the secret encryption key
 ENCRYPTION_KEY_BASE64=JeQ7i6EsZE58Z16v6LjhPstC742uAhePd6L42eHNfaA=
 VERIFY_TLS=true
 
-#filtering ports and addresses that are unnecessary for tracking
+# filtering ports and addresses that are unnecessary for tracking
 DENY_TARGETS=one.one.one.one,dns.google,1.1.1.1,8.8.8.8
 DENY_PORTS=53,853
 
