@@ -45,7 +45,7 @@ PORT=8080
 # proxy_set_header X-Real-IP $remote_addr;
 TRUST_PROXY=false
 
-# openssl rand -base64 32
+# secret code generated using openssl rand -base64 32 (it must be the same on the server and the client)
 ENCRYPTION_KEY_BASE64=JeQ7i6EsZE58Z16v6LjhPstC742uAhePd6L42eHNfaA=
 
 # data for initialization and connection to the database
@@ -90,7 +90,7 @@ FLUSH_INTERVAL_MS=10000
 # should the application start scanning logs from the very beginning when launching the application?
 START_FROM_BEGINNING=false
 
-# the secret encryption key
+# secret code generated using openssl rand -base64 32 (it must be the same on the server and the client)
 ENCRYPTION_KEY_BASE64=JeQ7i6EsZE58Z16v6LjhPstC742uAhePd6L42eHNfaA=
 VERIFY_TLS=true
 
